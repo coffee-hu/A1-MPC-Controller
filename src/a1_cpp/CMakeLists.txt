@@ -10,6 +10,8 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
 #check environmental variables
 message(STATUS "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")
 
+#引入头文件
+include_directories(/root/unitree_ws/devel/include)
 find_package(catkin REQUIRED COMPONENTS
         roscpp
         rospy
@@ -42,11 +44,13 @@ find_package(OsqpEigen REQUIRED)
 include_directories(
         $ENV{UNITREE_LEGGED_SDK_PATH}/include
 )
-
+#指定在链接阶段搜索库文件的路径
 link_directories($ENV{UNITREE_LEGGED_SDK_PATH}/lib)
+#定义EXTRA_LIBS变量，链接第三方库 pthread, libunitree_legged_sdk_amd64.so, lcm
 set(EXTRA_LIBS -pthread libunitree_legged_sdk_amd64.so lcm)
 
-# Declare cpp libraries
+# Declare cpp libraries 定义一个库 a1_lib，该库包括机器人的运动学、控制状态、工具类、
+#扩展卡尔曼滤波器（EKF）和凸优化的 MPC 控制器的实现文件
 # common robot controller every type of robots need
 add_library(a1_lib
         src/legKinematics/A1Kinematics.h
@@ -62,9 +66,10 @@ add_library(a1_lib
         src/ConvexMpc.cpp
         src/ConvexMpc.h
         )
+#链接 a1_lib 到 ROS 的 catkin_LIBRARIES 和 OSQP 的 OsqpEigen 库。
 target_link_libraries(a1_lib ${catkin_LIBRARIES} OsqpEigen::OsqpEigen)
 
-# lib of different types of robots
+# lib of different types of robots 定义不同的库
 add_library(gazebo_a1_lib
         src/GazeboA1ROS.h
         src/GazeboA1ROS.cpp

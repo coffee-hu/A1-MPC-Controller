@@ -140,7 +140,7 @@ void ConvexMpc::calculate_B_mat_c(double robot_mass, const Eigen::Matrix3d &a1_t
         B_mat_c.block<3, 3>(9, 3 * i) =
                 (1 / robot_mass) * Eigen::Matrix3d::Identity();
     }
-}
+} 
 
 void ConvexMpc::state_space_discretization(double dt) {
     // simplified exp 

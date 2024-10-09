@@ -40,8 +40,8 @@ RUN rm get-pip.py
 RUN pip --version
 RUN pip install pybullet==3.1.7
 RUN pip install tensorflow==1.15.4
-RUN pip install numpy==1.17.3
-RUN pip install scipy
+RUN pip install numpy==1.17.3 -i https://pypi.tuna.tsinghua.edu.cn/simple
+RUN pip install scipy -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 
 # install cmake 3.20 
@@ -74,7 +74,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 # add OSQP 
 # follow https://osqp.org/docs/get_started/sources.html#build-from-sources to install OSQP from sources
 WORKDIR /tmp
-RUN git clone --recursive https://github.com/oxfordcontrol/osqp
+RUN git clone --recursive -b release-0.6.3 https://github.com/oxfordcontrol/osqp
 WORKDIR /tmp/osqp
 RUN mkdir build 
 WORKDIR /tmp/osqp/build
@@ -83,7 +83,8 @@ RUN cmake --build .
 RUN cmake --build . --target install
 
 # add OSQP-python
-RUN pip install osqp
+# RUN pip install osqp
+RUN pip install osqp -i https://pypi.tuna.tsinghua.edu.cn/simple
 RUN apt-get install -y ipython
 
 # add osqp-eigen

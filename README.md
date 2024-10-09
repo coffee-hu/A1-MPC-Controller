@@ -147,7 +147,7 @@ If more terminals are needed, use the following command to add more terminals
 ```shell
 docker exec -it a1_unitree_gazebo_docker bash
 ```
- 
+
 In the docker container, run the following command to start the gazebo environment 
 
 ```shell
@@ -279,3 +279,6 @@ Please create issues for any installation problem.
 We referenced the controller architecture written by Dr. Xinye Da, General Manager of PX Robotics. 
 
 Zixin Zhang implemented a part of the convex MPC controller and the terrain adaption feature.  
+
+![alt text](image.png)
+![alt text](image-1.png)

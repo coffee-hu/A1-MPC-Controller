@@ -4,7 +4,8 @@
 
 #include "A1RobotControl.h"
 
-A1RobotControl::A1RobotControl() {
+A1RobotControl::A1RobotControl()
+{
     std::cout << "init A1RobotControl" << std::endl;
     // init QP solver
     // init some parameters
@@ -25,7 +26,8 @@ A1RobotControl::A1RobotControl() {
     mpc_init_counter = 0;
 
     // constraint matrix fixed
-    for (int i = 0; i < NUM_LEG; ++i) {
+    for (int i = 0; i < NUM_LEG; ++i)
+    {
         // extract F_zi
         linearMatrix.insert(i, 2 + i * 3) = 1;
         // friction pyramid
@@ -47,22 +49,25 @@ A1RobotControl::A1RobotControl() {
         lowerBound(NUM_LEG + i * 4 + 3) = -OsqpEigen::INFTY;
     }
     // debug linearMatrix
-//    std::cout << Eigen::MatrixXd(linearMatrix) << std::endl;
+    //    std::cout << Eigen::MatrixXd(linearMatrix) << std::endl;
 
     terrain_angle_filter = MovingWindowFilter(100);
-    for (int i = 0; i < NUM_LEG; ++i) {
+    for (int i = 0; i < NUM_LEG; ++i)
+    {
         recent_contact_x_filter[i] = MovingWindowFilter(60);
         recent_contact_y_filter[i] = MovingWindowFilter(60);
         recent_contact_z_filter[i] = MovingWindowFilter(60);
     }
 }
 
-A1RobotControl::A1RobotControl(ros::NodeHandle &_nh) : A1RobotControl() {
+A1RobotControl::A1RobotControl(ros::NodeHandle &_nh) : A1RobotControl()
+{
     std::cout << "init nh" << std::endl;
     nh = _nh;
     _nh.param("use_sim_time", use_sim_time);
     // initial debug publisher
-    for (int i = 0; i < NUM_LEG; ++i) {
+    for (int i = 0; i < NUM_LEG; ++i)
+    {
         std::string id = std::to_string(i);
         std::string start_topic = "/isaac_a1/foot" + id + "/start_pos";
         std::string end_topic = "/isaac_a1/foot" + id + "/end_pos";
@@ -133,7 +138,8 @@ A1RobotControl::A1RobotControl(ros::NodeHandle &_nh) : A1RobotControl() {
         foot_path_marker[i].pose.orientation.z = 0.0;
         foot_path_marker[i].points.resize(10); // fix to be 10 points
         foot_path_marker[i].colors.resize(10); // fix to be 10 points
-        for (int k = 0; k < 10; k++) {
+        for (int k = 0; k < 10; k++)
+        {
             foot_path_marker[i].colors[k].r = 0.0f;
             foot_path_marker[i].colors[k].g = 1.0f;
             foot_path_marker[i].colors[k].b = 0.0f;
@@ -145,51 +151,71 @@ A1RobotControl::A1RobotControl(ros::NodeHandle &_nh) : A1RobotControl() {
     pub_terrain_angle = nh.advertise<std_msgs::Float64>("a1_debug/terrain_angle", 100);
 }
 
-void A1RobotControl::update_plan(A1CtrlStates &state, double dt) {
+void A1RobotControl::update_plan(A1CtrlStates &state, double dt)
+{
+    // update_plan中实现的功能：
+    // 1. 确定步态状态，摆动腿和支撑腿确定
+    // 2. 确定摆动腿在世界坐标系中目标位置
     state.counter += 1;
-    if (!state.movement_mode) {
+    if (!state.movement_mode)
+    {
         // movement_mode == 0, standstill with all feet in contact with ground
-        for (bool &plan_contact: state.plan_contacts) plan_contact = true;
+        // 如果机器人处于站立模式，将所有腿的接触状态设置为true，表示所有腿都在接触地面
+        for (bool &plan_contact : state.plan_contacts)
+            plan_contact = true;
+        // 重置步态计数器
         state.gait_counter_reset();
-    } else {
-        // movement_mode == 1, walk
-        for (int i = 0; i < NUM_LEG; ++i) {
+    }
+    else
+    {
+        // movement_mode == 1, walk 根据步态更新足部接触状态
+        for (int i = 0; i < NUM_LEG; ++i)
+        {
+            // 更新每条腿的步态计数器state.gait_counter(i)，根据计数器的速度state.gait_counter_speed(i)来控制步态周期，并通过取模操作确保步态循环周期正确
             state.gait_counter(i) = state.gait_counter(i) + state.gait_counter_speed(i);
             state.gait_counter(i) = std::fmod(state.gait_counter(i), state.counter_per_gait);
-            if (state.gait_counter(i) <= state.counter_per_swing) {
+            if (state.gait_counter(i) <= state.counter_per_swing)
+            {
                 state.plan_contacts[i] = true;
-            } else {
+            }
+            else
+            {
                 state.plan_contacts[i] = false;
             }
         }
     }
 
     // update foot plan: state.foot_pos_target_world
-    Eigen::Vector3d lin_vel_world = state.root_lin_vel; // world frame linear velocity
+    Eigen::Vector3d lin_vel_world = state.root_lin_vel;                             // world frame linear velocity
     Eigen::Vector3d lin_vel_rel = state.root_rot_mat_z.transpose() * lin_vel_world; // robot body frame linear velocity
 
-    // Raibert Heuristic, calculate foothold position
+    // Raibert Heuristic, calculate foothold position 计算落足点位置
     state.foot_pos_target_rel = state.default_foot_pos;
-    for (int i = 0; i < NUM_LEG; ++i) {
+    for (int i = 0; i < NUM_LEG; ++i)
+    {
         double delta_x =
-                std::sqrt(std::abs(state.default_foot_pos(2)) / 9.8) * (lin_vel_rel(0) - state.root_lin_vel_d(0)) +
-                ((state.counter_per_swing / state.gait_counter_speed(i)) * state.control_dt) / 2.0 *
+            std::sqrt(std::abs(state.default_foot_pos(2)) / 9.8) * (lin_vel_rel(0) - state.root_lin_vel_d(0)) +
+            ((state.counter_per_swing / state.gait_counter_speed(i)) * state.control_dt) / 2.0 *
                 state.root_lin_vel_d(0);
         double delta_y =
-                std::sqrt(std::abs(state.default_foot_pos(2)) / 9.8) * (lin_vel_rel(1) - state.root_lin_vel_d(1)) +
-                ((state.counter_per_swing / state.gait_counter_speed(i)) * state.control_dt) / 2.0 *
+            std::sqrt(std::abs(state.default_foot_pos(2)) / 9.8) * (lin_vel_rel(1) - state.root_lin_vel_d(1)) +
+            ((state.counter_per_swing / state.gait_counter_speed(i)) * state.control_dt) / 2.0 *
                 state.root_lin_vel_d(1);
 
-        if (delta_x < -FOOT_DELTA_X_LIMIT) {
+        if (delta_x < -FOOT_DELTA_X_LIMIT)
+        {
             delta_x = -FOOT_DELTA_X_LIMIT;
         }
-        if (delta_x > FOOT_DELTA_X_LIMIT) {
+        if (delta_x > FOOT_DELTA_X_LIMIT)
+        {
             delta_x = FOOT_DELTA_X_LIMIT;
         }
-        if (delta_y < -FOOT_DELTA_Y_LIMIT) {
+        if (delta_y < -FOOT_DELTA_Y_LIMIT)
+        {
             delta_y = -FOOT_DELTA_Y_LIMIT;
         }
-        if (delta_y > FOOT_DELTA_Y_LIMIT) {
+        if (delta_y > FOOT_DELTA_Y_LIMIT)
+        {
             delta_y = FOOT_DELTA_Y_LIMIT;
         }
 
@@ -197,17 +223,20 @@ void A1RobotControl::update_plan(A1CtrlStates &state, double dt) {
         state.foot_pos_target_rel(1, i) += delta_y;
 
         state.foot_pos_target_abs.block<3, 1>(0, i) = state.root_rot_mat * state.foot_pos_target_rel.block<3, 1>(0, i);
+        // 更新每条腿在世界坐标系中目标位置
         state.foot_pos_target_world.block<3, 1>(0, i) = state.foot_pos_target_abs.block<3, 1>(0, i) + state.root_pos;
     }
 }
 
-void A1RobotControl::generate_swing_legs_ctrl(A1CtrlStates &state, double dt) {
+void A1RobotControl::generate_swing_legs_ctrl(A1CtrlStates &state, double dt)
+{
     state.joint_torques.setZero();
-
-    // get current foot pos and target foot pose
+    // 函数功能：
+    // 1.
+    //  get current foot pos and target foot pose
     Eigen::Matrix<double, 3, NUM_LEG> foot_pos_cur;
     Eigen::Matrix<double, 3, NUM_LEG> foot_vel_cur;
-    Eigen::Matrix<float, 1, NUM_LEG> spline_time;
+    Eigen::Matrix<float, 1, NUM_LEG> spline_time; // 用于控制贝塞尔曲线的时间参数
     spline_time.setZero();
     Eigen::Matrix<double, 3, NUM_LEG> foot_pos_target;
     foot_pos_target.setZero();
@@ -217,52 +246,65 @@ void A1RobotControl::generate_swing_legs_ctrl(A1CtrlStates &state, double dt) {
     Eigen::Matrix<double, 3, NUM_LEG> foot_vel_error;
 
     // the foot force of swing foot and stance foot, both are in robot frame
-    Eigen::Matrix<double, 3, NUM_LEG> foot_forces_kin;
-    Eigen::Matrix<double, 3, NUM_LEG> foot_forces_grf;
+    Eigen::Matrix<double, 3, NUM_LEG> foot_forces_kin; // 基于运动学计算的足端力
+    Eigen::Matrix<double, 3, NUM_LEG> foot_forces_grf; // 地面反作用力
 
-    for (int i = 0; i < NUM_LEG; ++i) {
+    for (int i = 0; i < NUM_LEG; ++i)
+    {
+        // 当前足部位置从绝对坐标转换为机器人相对坐标
         foot_pos_cur.block<3, 1>(0, i) = state.root_rot_mat_z.transpose() * state.foot_pos_abs.block<3, 1>(0, i);
 
         // from foot_pos_cur to foot_pos_final computes an intermediate point using BezierUtils
-        if (state.gait_counter(i) <= state.counter_per_swing) {
+        // 如果步态计数器小于或等于摆动周期，说明该腿处于支撑期
+        if (state.gait_counter(i) <= state.counter_per_swing)
+        {
             // stance foot
             spline_time(i) = 0.0;
             // in this case the foot should be stance
             // keep refreshing foot_pos_start in stance mode
             state.foot_pos_start.block<3, 1>(0, i) = foot_pos_cur.block<3, 1>(0, i);
-        } else {
+        }
+        else
+        {
             // in this case the foot should be swing
             spline_time(i) = float(state.gait_counter(i) - state.counter_per_swing) / float(state.counter_per_swing);
         }
-
+        // 通过贝塞尔插值得到的foot_pos_target是当前时刻足部应该达到的目标位置
         foot_pos_target.block<3, 1>(0, i) = bezierUtils[i].get_foot_pos_curve(spline_time(i),
                                                                               state.foot_pos_start.block<3, 1>(0, i),
                                                                               state.foot_pos_target_rel.block<3, 1>(0, i),
                                                                               0.0);
 
+        // 计算当前足部的速度
         foot_vel_cur.block<3, 1>(0, i) = (foot_pos_cur.block<3, 1>(0, i) - state.foot_pos_rel_last_time.block<3, 1>(0, i)) / dt;
         state.foot_pos_rel_last_time.block<3, 1>(0, i) = foot_pos_cur.block<3, 1>(0, i);
 
+        // 计算目标足部的速度
         foot_vel_target.block<3, 1>(0, i) = (foot_pos_target.block<3, 1>(0, i) - state.foot_pos_target_last_time.block<3, 1>(0, i)) / dt;
         state.foot_pos_target_last_time.block<3, 1>(0, i) = foot_pos_target.block<3, 1>(0, i);
 
         foot_pos_error.block<3, 1>(0, i) = foot_pos_target.block<3, 1>(0, i) - foot_pos_cur.block<3, 1>(0, i);
         foot_vel_error.block<3, 1>(0, i) = foot_vel_target.block<3, 1>(0, i) - foot_vel_cur.block<3, 1>(0, i);
+
+        // 通过位置误差和速度误差计算控制力，这些力用来控制足端向目标位置和速度进行调整
         foot_forces_kin.block<3, 1>(0, i) = foot_pos_error.block<3, 1>(0, i).cwiseProduct(state.kp_foot.block<3, 1>(0, i)) +
                                             foot_vel_error.block<3, 1>(0, i).cwiseProduct(state.kd_foot.block<3, 1>(0, i));
     }
     state.foot_pos_cur = foot_pos_cur;
 
-    // detect early contact
+    // detect early contact 检查早期接触
     bool last_contacts[NUM_LEG];
 
-    for (int i = 0; i < NUM_LEG; ++i) {
-        if (state.gait_counter(i) <= state.counter_per_swing * 1.5) {
+    for (int i = 0; i < NUM_LEG; ++i)
+    {
+        if (state.gait_counter(i) <= state.counter_per_swing * 1.5)
+        {
             state.early_contacts[i] = false;
         }
         if (!state.plan_contacts[i] &&
             (state.gait_counter(i) > state.counter_per_swing * 1.5) &&
-            (state.foot_force(i) > FOOT_FORCE_LOW)) {
+            (state.foot_force(i) > FOOT_FORCE_LOW))
+        {
             state.early_contacts[i] = true;
         }
 
@@ -271,13 +313,14 @@ void A1RobotControl::generate_swing_legs_ctrl(A1CtrlStates &state, double dt) {
         state.contacts[i] = state.plan_contacts[i] || state.early_contacts[i];
 
         // record recent contact position if the foot is in touch with the ground
-        if (state.contacts[i]) {
-//            state.foot_pos_recent_contact.block<3, 1>(0, i) = state.root_rot_mat.transpose() * (state.foot_pos_world.block<3, 1>(0, i));
-//            state.foot_pos_recent_contact.block<3, 1>(0, i) = state.foot_pos_abs.block<3, 1>(0, i);
+        if (state.contacts[i])
+        {
+            //            state.foot_pos_recent_contact.block<3, 1>(0, i) = state.root_rot_mat.transpose() * (state.foot_pos_world.block<3, 1>(0, i));
+            //            state.foot_pos_recent_contact.block<3, 1>(0, i) = state.foot_pos_abs.block<3, 1>(0, i);
             state.foot_pos_recent_contact.block<3, 1>(0, i)
-                    << recent_contact_x_filter[i].CalculateAverage(state.foot_pos_abs(0, i)),
-                    recent_contact_y_filter[i].CalculateAverage(state.foot_pos_abs(1, i)),
-                    recent_contact_z_filter[i].CalculateAverage(state.foot_pos_abs(2, i));
+                << recent_contact_x_filter[i].CalculateAverage(state.foot_pos_abs(0, i)),
+                recent_contact_y_filter[i].CalculateAverage(state.foot_pos_abs(1, i)),
+                recent_contact_z_filter[i].CalculateAverage(state.foot_pos_abs(2, i));
         }
     }
 
@@ -286,83 +329,111 @@ void A1RobotControl::generate_swing_legs_ctrl(A1CtrlStates &state, double dt) {
     state.foot_forces_kin = foot_forces_kin;
 }
 
-void A1RobotControl::compute_joint_torques(A1CtrlStates &state) {
+void A1RobotControl::compute_joint_torques(A1CtrlStates &state)
+{
     Eigen::Matrix<double, NUM_DOF, 1> joint_torques;
     joint_torques.setZero();
     mpc_init_counter++;
-    // for the first 10 ticks, just return zero torques.
-    if (mpc_init_counter < 10) {
+    // for the first 10 ticks, just return zero torques. 在初始化的前10个时间步内，控制器不会输出任何关节力矩，即将所有力矩设置为0
+    if (mpc_init_counter < 10)
+    {
         state.joint_torques = joint_torques;
-    } else {
+    }
+    else
+    {
         // for each leg, if it is a swing leg (contact[i] is false), use foot_force_kin to get joint_torque
         // for each leg, if it is a stance leg (contact[i] is true), use foot_forces_grf to get joint_torque
-        for (int i = 0; i < NUM_LEG; ++i) {
+        for (int i = 0; i < NUM_LEG; ++i)
+        {
+            // 提取出每条腿的3x3雅可比矩阵
             Eigen::Matrix3d jac = state.j_foot.block<3, 3>(3 * i, 3 * i);
-            if (state.contacts[i]) {
+            if (state.contacts[i])
+            {
                 // stance leg
                 joint_torques.segment<3>(i * 3) = jac.transpose() * -state.foot_forces_grf.block<3, 1>(0, i);
-            } else {
+            }
+            else
+            {
                 // swing leg
+                // 使用足部的期望运动学力 foot_forces_kin 计算关节力矩
+                // force_tgt 为目标力
                 Eigen::Vector3d force_tgt = state.km_foot.cwiseProduct(state.foot_forces_kin.block<3, 1>(0, i));
-                joint_torques.segment<3>(i * 3) = jac.lu().solve(force_tgt);   // jac * tau = F
+                joint_torques.segment<3>(i * 3) = jac.lu().solve(force_tgt); // jac * tau = F
             }
         }
-        // gravity compensation
+        // gravity compensation 引入重力补偿
         joint_torques += state.torques_gravity;
 
         // prevent nan
-        for (int i = 0; i < 12; ++i) {
+        for (int i = 0; i < 12; ++i)
+        {
             if (!isnan(joint_torques[i]))
                 state.joint_torques[i] = joint_torques[i];
         }
     }
 }
 
-Eigen::Matrix<double, 3, NUM_LEG> A1RobotControl::compute_grf(A1CtrlStates &state, double dt) {
+Eigen::Matrix<double, 3, NUM_LEG> A1RobotControl::compute_grf(A1CtrlStates &state, double dt)
+{
     Eigen::Matrix<double, 3, NUM_LEG> foot_forces_grf;
     // first get parameters needed to construct the solver hessian and gradient
     // use euler angle to get desired angle
+    // 计算欧拉角误差
     Eigen::Vector3d euler_error = state.root_euler_d - state.root_euler;
 
     // limit euler error to pi/2
-    if (euler_error(2) > 3.1415926 * 1.5) {
+    if (euler_error(2) > 3.1415926 * 1.5)
+    {
         euler_error(2) = state.root_euler_d(2) - 3.1415926 * 2 - state.root_euler(2);
-    } else if (euler_error(2) < -3.1415926 * 1.5) {
+    }
+    else if (euler_error(2) < -3.1415926 * 1.5)
+    {
         euler_error(2) = state.root_euler_d(2) + 3.1415926 * 2 - state.root_euler(2);
     }
 
     // only do terrain adaptation in MPC
-    if (state.stance_leg_control_type == 1) {
+    // 地形适应：根据地形角度和足端接触高度差来调整机器人的俯仰姿态
+    if (state.stance_leg_control_type == 1)
+    {
         Eigen::Vector3d surf_coef = compute_walking_surface(state);
         Eigen::Vector3d flat_ground_coef;
         flat_ground_coef << 0, 0, 1;
         double terrain_angle = 0;
         // only record terrain angle when the body is high
-        if (state.root_pos[2] > 0.1) {
+        if (state.root_pos[2] > 0.1)
+        {
+            // 平地法向量和行走表面法向量之间的角度
             terrain_angle = terrain_angle_filter.CalculateAverage(Utils::cal_dihedral_angle(flat_ground_coef, surf_coef));
-        } else {
+        }
+        else
+        {
             terrain_angle = 0;
         }
 
-        if (terrain_angle > 0.5) {
+        if (terrain_angle > 0.5)
+        {
             terrain_angle = 0.5;
         }
-        if (terrain_angle < -0.5) {
+        if (terrain_angle < -0.5)
+        {
             terrain_angle = -0.5;
         }
 
         // FL, FR, RL, RR
         double F_R_diff = state.foot_pos_recent_contact(2, 0) + state.foot_pos_recent_contact(2, 1) - state.foot_pos_recent_contact(2, 2) -
-                        state.foot_pos_recent_contact(2, 3);
+                          state.foot_pos_recent_contact(2, 3);
 
-        if (state.use_terrain_adapt) {
-            if (F_R_diff > 0.05) {
-            state.root_euler_d[1] = -terrain_angle;
-            } else {
-            state.root_euler_d[1] = terrain_angle;
+        if (state.use_terrain_adapt)
+        {
+            if (F_R_diff > 0.05)
+            {
+                state.root_euler_d[1] = -terrain_angle;
+            }
+            else
+            {
+                state.root_euler_d[1] = terrain_angle;
             }
         }
-
 
         std_msgs::Float64 terrain_angle_msg;
         terrain_angle_msg.data = terrain_angle * (180 / 3.1415926);
@@ -371,28 +442,30 @@ Eigen::Matrix<double, 3, NUM_LEG> A1RobotControl::compute_grf(A1CtrlStates &stat
         std::cout << "terrain angle: " << terrain_angle << std::endl;
 
         // save calculated terrain pitch angle
-        // TODO: limit terrain pitch angle to -30 to 30? 
+        // TODO: limit terrain pitch angle to -30 to 30?
         state.terrain_pitch_angle = terrain_angle;
     }
-    if (state.stance_leg_control_type == 0) { // 0: QP
+    if (state.stance_leg_control_type == 0)
+    { // 0: QP
         // desired acc in world frame
         root_acc.setZero();
         root_acc.block<3, 1>(0, 0) = state.kp_linear.cwiseProduct(state.root_pos_d - state.root_pos);
 
         root_acc.block<3, 1>(0, 0) += state.root_rot_mat * state.kd_linear.cwiseProduct(
-                state.root_lin_vel_d - state.root_rot_mat.transpose() * state.root_lin_vel);
+                                                               state.root_lin_vel_d - state.root_rot_mat.transpose() * state.root_lin_vel);
 
         root_acc.block<3, 1>(3, 0) = state.kp_angular.cwiseProduct(euler_error);
 
         root_acc.block<3, 1>(3, 0) += state.kd_angular.cwiseProduct(
-                state.root_ang_vel_d - state.root_rot_mat.transpose() * state.root_ang_vel);
+            state.root_ang_vel_d - state.root_rot_mat.transpose() * state.root_ang_vel);
 
         // add gravity
         root_acc(2) += state.robot_mass * 9.8;
 
         // Create inverse inertia matrix
         Eigen::Matrix<double, 6, DIM_GRF> inertia_inv;
-        for (int i = 0; i < NUM_LEG; ++i) {
+        for (int i = 0; i < NUM_LEG; ++i)
+        {
             inertia_inv.block<3, 3>(0, i * 3).setIdentity();
             // TODO: confirm this should be root_rot_mat instead of root_rot_mat
             inertia_inv.block<3, 3>(3, i * 3) = state.root_rot_mat_z.transpose() * Utils::skew(state.foot_pos_abs.block<3, 1>(0, i));
@@ -406,7 +479,8 @@ Eigen::Matrix<double, 3, NUM_LEG> A1RobotControl::compute_grf(A1CtrlStates &stat
         gradient.block<3 * NUM_LEG, 1>(0, 0) = -inertia_inv.transpose() * Q * root_acc;
 
         // adjust bounds according to contact flag
-        for (int i = 0; i < NUM_LEG; ++i) {
+        for (int i = 0; i < NUM_LEG; ++i)
+        {
             double c_flag = state.contacts[i] ? 1.0 : 0.0;
             lowerBound(i) = c_flag * F_min;
             upperBound(i) = c_flag * F_max;
@@ -436,55 +510,58 @@ Eigen::Matrix<double, 3, NUM_LEG> A1RobotControl::compute_grf(A1CtrlStates &stat
 
         std::cout << "qp solver init time: " << ms_double_1.count() << "ms; solve time: " << ms_double_2.count() << "ms" << std::endl;
 
-        Eigen::VectorXd QPSolution = solver.getSolution(); //12x1
-        for (int i = 0; i < NUM_LEG; ++i) {
+        Eigen::VectorXd QPSolution = solver.getSolution(); // 12x1
+        for (int i = 0; i < NUM_LEG; ++i)
+        {
             // the QP solves for world frame force
             // here we convert the force into robot frame
             foot_forces_grf.block<3, 1>(0, i) = state.root_rot_mat.transpose() * QPSolution.segment<3>(i * 3);
         }
-
-    } else if (state.stance_leg_control_type == 1) { // 1: MPC
+    }
+    else if (state.stance_leg_control_type == 1)
+    { // 1: MPC
         ConvexMpc mpc_solver = ConvexMpc(state.q_weights, state.r_weights);
         mpc_solver.reset();
 
         // initialize the mpc state at the first time step
         // state.mpc_states.resize(13);
         state.mpc_states << state.root_euler[0], state.root_euler[1], state.root_euler[2],
-                state.root_pos[0], state.root_pos[1], state.root_pos[2],
-                state.root_ang_vel[0], state.root_ang_vel[1], state.root_ang_vel[2],
-                state.root_lin_vel[0], state.root_lin_vel[1], state.root_lin_vel[2],
-                -9.8;
+            state.root_pos[0], state.root_pos[1], state.root_pos[2],
+            state.root_ang_vel[0], state.root_ang_vel[1], state.root_ang_vel[2],
+            state.root_lin_vel[0], state.root_lin_vel[1], state.root_lin_vel[2],
+            -9.8;
 
         // previously we use dt passed by outer thread. It turns out that this dt is not stable on hardware.
         // if the thread is slowed down, dt becomes large, then MPC will output very large force and torque value
         // which will cause over current. Here we use a new mpc_dt, this should be roughly close to the average dt
-        // of thread 1 
+        // of thread 1
         double mpc_dt = 0.0025;
 
         // in simulation, use dt has no problem
-        if (use_sim_time == "true") {
+        if (use_sim_time == "true")
+        {
             mpc_dt = dt;
         }
 
         // initialize the desired mpc states trajectory
         state.root_lin_vel_d_world = state.root_rot_mat * state.root_lin_vel_d;
         // state.mpc_states_d.resize(13 * PLAN_HORIZON);
-        for (int i = 0; i < PLAN_HORIZON; ++i) {
+        for (int i = 0; i < PLAN_HORIZON; ++i)
+        {
             state.mpc_states_d.segment(i * 13, 13)
-                    <<
-                    state.root_euler_d[0],
-                    state.root_euler_d[1],
-                    state.root_euler[2] + state.root_ang_vel_d[2] * mpc_dt * (i + 1),
-                    state.root_pos[0] + state.root_lin_vel_d_world[0] * mpc_dt * (i + 1),
-                    state.root_pos[1] + state.root_lin_vel_d_world[1] * mpc_dt * (i + 1),
-                    state.root_pos_d[2],
-                    state.root_ang_vel_d[0],
-                    state.root_ang_vel_d[1],
-                    state.root_ang_vel_d[2],
-                    state.root_lin_vel_d_world[0],
-                    state.root_lin_vel_d_world[1],
-                    0,
-                    -9.8;
+                << state.root_euler_d[0],
+                state.root_euler_d[1],
+                state.root_euler[2] + state.root_ang_vel_d[2] * mpc_dt * (i + 1),
+                state.root_pos[0] + state.root_lin_vel_d_world[0] * mpc_dt * (i + 1),
+                state.root_pos[1] + state.root_lin_vel_d_world[1] * mpc_dt * (i + 1),
+                state.root_pos_d[2],
+                state.root_ang_vel_d[0],
+                state.root_ang_vel_d[1],
+                state.root_ang_vel_d[2],
+                state.root_lin_vel_d_world[0],
+                state.root_lin_vel_d_world[1],
+                0,
+                -9.8;
         }
 
         // a single A_c is computed for the entire reference trajectory
@@ -495,7 +572,8 @@ Eigen::Matrix<double, 3, NUM_LEG> A1RobotControl::compute_grf(A1CtrlStates &stat
         // from the reference trajectory and foot placement controller
         // state.foot_pos_abs_mpc = state.foot_pos_abs;
         auto t2 = std::chrono::high_resolution_clock::now();
-        for (int i = 0; i < PLAN_HORIZON; i++) {
+        for (int i = 0; i < PLAN_HORIZON; i++)
+        {
             // calculate current B_c matrix
             mpc_solver.calculate_B_mat_c(state.robot_mass,
                                          state.a1_trunk_inertia,
@@ -517,20 +595,29 @@ Eigen::Matrix<double, 3, NUM_LEG> A1RobotControl::compute_grf(A1CtrlStates &stat
         auto t3 = std::chrono::high_resolution_clock::now();
         mpc_solver.calculate_qp_mats(state);
 
-        // solve
+        // solve 使用OSQP求解器求解
         auto t4 = std::chrono::high_resolution_clock::now();
-        if (!solver.isInitialized()) {
+        if (!solver.isInitialized())
+        {
+            // OSQP对MPC进行求解的方法查看https://blog.csdn.net/weixin_44063383/article/details/139688819
+            // 配置求解器的设置：
             solver.settings()->setVerbosity(false);
+            // 解释：这行代码会设置求解器的输出冗长程度，setVerbosity(false) 会关闭求解器的详细输出，使其在求解过程中不输出额外的信息，这在需要安静地运行求解器时非常有用；
             solver.settings()->setWarmStart(true);
-            solver.data()->setNumberOfVariables(NUM_DOF * PLAN_HORIZON);
-            solver.data()->setNumberOfConstraints(MPC_CONSTRAINT_DIM * PLAN_HORIZON);
-            solver.data()->setLinearConstraintsMatrix(mpc_solver.linear_constraints);
-            solver.data()->setHessianMatrix(mpc_solver.hessian);
-            solver.data()->setGradient(mpc_solver.gradient);
-            solver.data()->setLowerBound(mpc_solver.lb);
-            solver.data()->setUpperBound(mpc_solver.ub);
+            // 解释：启用 WarmStart 功能，加快求解速度（启用 WarmStart 意味着求解器在求解问题时，可以利用之前求解的结果作为初始猜测来加速收敛，这在处理连续求解类似问题时特别有用，可以显著减少计算时间）；
+
+            // 配置求解器的数据：
+            solver.data()->setNumberOfVariables(NUM_DOF * PLAN_HORIZON);              // 变量数
+            solver.data()->setNumberOfConstraints(MPC_CONSTRAINT_DIM * PLAN_HORIZON); // 约束数
+            solver.data()->setLinearConstraintsMatrix(mpc_solver.linear_constraints); // 配置Ac
+            solver.data()->setHessianMatrix(mpc_solver.hessian);                      // 传入P矩阵
+            solver.data()->setGradient(mpc_solver.gradient);                          // 传入Q向量
+            solver.data()->setLowerBound(mpc_solver.lb);                              // 传入l
+            solver.data()->setUpperBound(mpc_solver.ub);                              // 传入u
             solver.initSolver();
-        } else {
+        }
+        else
+        {
             solver.updateHessianMatrix(mpc_solver.hessian);
             solver.updateGradient(mpc_solver.gradient);
             solver.updateLowerBound(mpc_solver.lb);
@@ -546,16 +633,17 @@ Eigen::Matrix<double, 3, NUM_LEG> A1RobotControl::compute_grf(A1CtrlStates &stat
         std::chrono::duration<double, std::milli> ms_double_4 = t5 - t4;
         std::chrono::duration<double, std::milli> ms_double_5 = t6 - t5;
 
-//        std::cout << "mpc cal A_mat_c: " << ms_double_1.count() << "ms" << std::endl;
-//        std::cout << "mpc cal B_mat_d_list: " << ms_double_2.count() << "ms" << std::endl;
-//        std::cout << "mpc cal qp mats: " << ms_double_3.count() << "ms" << std::endl;
-//        std::cout << "mpc init time: " << ms_double_4.count() << "ms" << std::endl;
-//        std::cout << "mpc solve time: " << ms_double_5.count() << "ms" << std::endl << std::endl;
+        //        std::cout << "mpc cal A_mat_c: " << ms_double_1.count() << "ms" << std::endl;
+        //        std::cout << "mpc cal B_mat_d_list: " << ms_double_2.count() << "ms" << std::endl;
+        //        std::cout << "mpc cal qp mats: " << ms_double_3.count() << "ms" << std::endl;
+        //        std::cout << "mpc init time: " << ms_double_4.count() << "ms" << std::endl;
+        //        std::cout << "mpc solve time: " << ms_double_5.count() << "ms" << std::endl << std::endl;
 
         Eigen::VectorXd solution = solver.getSolution();
         // std::cout << solution.transpose() << std::endl;
 
-        for (int i = 0; i < NUM_LEG; ++i) {
+        for (int i = 0; i < NUM_LEG; ++i)
+        {
             if (!isnan(solution.segment<3>(i * 3).norm()))
                 foot_forces_grf.block<3, 1>(0, i) = state.root_rot_mat.transpose() * solution.segment<3>(i * 3);
         }
@@ -563,7 +651,8 @@ Eigen::Matrix<double, 3, NUM_LEG> A1RobotControl::compute_grf(A1CtrlStates &stat
     return foot_forces_grf;
 }
 
-Eigen::Vector3d A1RobotControl::compute_walking_surface(A1CtrlStates &state) {
+Eigen::Vector3d A1RobotControl::compute_walking_surface(A1CtrlStates &state)
+{
     Eigen::Matrix<double, NUM_LEG, 3> W;
     Eigen::VectorXd foot_pos_z;
     Eigen::Vector3d a;

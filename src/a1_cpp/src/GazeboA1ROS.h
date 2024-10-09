@@ -32,6 +32,7 @@
 #include <unitree_legged_msgs/MotorState.h>
 #include <unitree_legged_msgs/MotorCmd.h>
 #include <unitree_legged_msgs/LowCmd.h>
+#include "std_msgs/String.h"
 // #include <gazebo_msgs/ModelStates.h>
 
 // control parameters
@@ -60,6 +61,8 @@ public:
     void imu_callback(const sensor_msgs::Imu::ConstPtr &imu);
 
     void joy_callback(const sensor_msgs::Joy::ConstPtr &joy_msg);
+
+    void keyboard_callback(const std_msgs::String::ConstPtr &keyboard_msg);
 
     void FL_hip_state_callback(const unitree_legged_msgs::MotorState &a1_joint_state);
 
@@ -110,6 +113,7 @@ private:
     ros::Subscriber sub_gt_pose_msg;
     ros::Subscriber sub_imu_msg;
     ros::Subscriber sub_joy_msg;
+    ros::Subscriber sub_keyboard_msg;
 
     // debug estimation
     ros::Publisher pub_estimated_pose;

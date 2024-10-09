@@ -56,6 +56,8 @@ GazeboA1ROS::GazeboA1ROS(ros::NodeHandle &_nh) {
     sub_foot_contact_msg[3] = nh.subscribe("/visual/RR_foot_contact/the_force", 2, &GazeboA1ROS::RR_foot_contact_callback, this);
 
     sub_joy_msg = nh.subscribe("/joy", 1000, &GazeboA1ROS::joy_callback, this);
+    sub_keyboard_msg =
+      nh.subscribe("/keyboard_command", 10, &GazeboA1ROS::keyboard_callback, this);
 
     joy_cmd_ctrl_state = 0;
     joy_cmd_ctrl_state_change_request = false;
@@ -382,6 +384,23 @@ void GazeboA1ROS::RR_foot_contact_callback(const geometry_msgs::WrenchStamped &f
 
 void GazeboA1ROS::
 joy_callback(const sensor_msgs::Joy::ConstPtr &joy_msg) {
+    std::cout<<"----------------------------------------joy_cb--------------------------"<<std::endl;
+    // 打印axes数据
+    std::cout << "Axes: ";
+    for (size_t i = 0; i < joy_msg->axes.size(); ++i)
+    {
+        std::cout << "axes[" << i << "]: " << joy_msg->axes[i] << " ";
+    }
+    std::cout << std::endl;
+
+    // 打印buttons数据
+    std::cout << "Buttons: ";
+    for (size_t i = 0; i < joy_msg->buttons.size(); ++i)
+    {
+        std::cout << "buttons[" << i << "]: " << joy_msg->buttons[i] << " ";
+    }
+    std::cout << std::endl;
+
     // left updown
     joy_cmd_velz = joy_msg->axes[1] * JOY_CMD_BODY_HEIGHT_VEL;
 
@@ -407,3 +426,68 @@ joy_callback(const sensor_msgs::Joy::ConstPtr &joy_msg) {
         joy_cmd_exit = true;
     }
 }
+
+void GazeboA1ROS::keyboard_callback(const std_msgs::String::ConstPtr& keyboard_msg) {
+    // 初始化速度和控制状态
+    joy_cmd_velz = 0;
+    joy_cmd_velx = 0;
+    joy_cmd_vely = 0;
+    joy_cmd_yaw_rate = 0;
+    joy_cmd_pitch_rate = 0;
+    joy_cmd_roll_rate = 0;
+    joy_cmd_ctrl_state_change_request = false;
+    joy_cmd_exit = false;
+
+    // 获取键盘输入字符
+    char key = keyboard_msg->data[0];  // 假设字符串只包含单个字符
+
+    // 检查键值并对应设置控制命令
+    switch (key) {
+        case 'w': // 前进
+            joy_cmd_velx = JOY_CMD_VELX_MAX;
+            break;
+        case 's': // 后退
+            joy_cmd_velx = -JOY_CMD_VELX_MAX;
+            break;
+        case 'a': // 左移
+            joy_cmd_vely = JOY_CMD_VELY_MAX;
+            break;
+        case 'd': // 右移
+            joy_cmd_vely = -JOY_CMD_VELY_MAX;
+            break;
+        case 'i': // 向上（z 方向）
+            joy_cmd_velz = JOY_CMD_BODY_HEIGHT_VEL;
+            break;
+        case 'k': // 向下（z 方向）
+            joy_cmd_velz = -JOY_CMD_BODY_HEIGHT_VEL;
+            break;
+        case 'j': // 向左转（yaw）
+            joy_cmd_yaw_rate = JOY_CMD_YAW_MAX;
+            break;
+        case 'l': // 向右转（yaw）
+            joy_cmd_yaw_rate = -JOY_CMD_YAW_MAX;
+            break;
+        case 'u': // 向上俯仰（pitch）
+            joy_cmd_pitch_rate = JOY_CMD_PITCH_MAX;
+            break;
+        case 'o': // 向下俯仰（pitch）
+            joy_cmd_pitch_rate = -JOY_CMD_PITCH_MAX;
+            break;
+        case 'q': // 向左滚转（roll）
+            joy_cmd_roll_rate = JOY_CMD_ROLL_MAX;
+            break;
+        case 'e': // 向右滚转（roll）
+            joy_cmd_roll_rate = -JOY_CMD_ROLL_MAX;
+            break;
+        case 'c': // 控制状态改变请求
+            joy_cmd_ctrl_state_change_request = true;
+            break;
+        case 'x': // 退出命令
+            std::cout << "You have pressed the exit button!!!!" << std::endl;
+            joy_cmd_exit = true;
+            break;
+        default:
+            break;
+    }
+}
+

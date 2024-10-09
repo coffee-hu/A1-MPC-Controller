@@ -41,7 +41,7 @@ public:
 
     void compute_joint_torques(A1CtrlStates &state);
 
-    Eigen::Matrix<double, 3, NUM_LEG> compute_grf(A1CtrlStates &state, double dt);
+    Eigen::Matrix<double, 3, NUM_LEG> compute_grf(A1CtrlStates &state, double dt); //计算地面反作用力
 
     Eigen::Vector3d compute_walking_surface(A1CtrlStates &state);
 

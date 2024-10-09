@@ -41,6 +41,8 @@
 
 #define FOOT_FILTER_WINDOW_SIZE 5
 
+// A1 硬件以 FR、FL、RR、RL 顺序返回信息并按此顺序接收信息
+// 我们需要在此函数中采用此顺序
 // one of the most important thing: A1 hardware return info with FR, FL, RR, RL order and receives info in this order
 // we need to take of this order in this function
 class HardwareA1ROS {
