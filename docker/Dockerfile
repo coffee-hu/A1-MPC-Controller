@@ -144,6 +144,14 @@ RUN git clone https://github.com/unitreerobotics/unitree_legged_sdk.git && \
     cd build && \
     cmake .. && \
     make -j12 
+    
+WORKDIR $SUPPORT_WS
+RUN git clone https://github.com/unitreerobotics/unitree_actuator_sdk.git && \
+  cd ${SUPPORT_WS}/unitree_actuator_sdk && \
+  mkdir build && \
+  cd build && \
+  cmake .. && \
+  make -j12
 
 WORKDIR $SUPPORT_WS
 RUN git clone https://github.com/unitreerobotics/aliengo_sdk.git && \
@@ -171,11 +179,13 @@ WORKDIR $UNITREE_WS
 # RUN perl -pi -e 's/[^[:ascii:]]//g' $UNITREE_WS/src/unitree_ros/unitree_legged_msgs/msg/MotorState.msg 
 ENV UNITREE_SDK_VERSION=3_2
 ENV UNITREE_LEGGED_SDK_PATH=${SUPPORT_WS}/unitree_legged_sdk
+ENV UNITREE_ACTUATOR_SDK_PATH=${SUPPORT_WS}/unitree_actuator_sdk
 ENV ALIENGO_SDK_PATH=${SUPPORT_WS}/aliengo_sdk
 ENV UNITREE_PLATFORM=amd64
 RUN echo "#unitree config" >> ~/.bashrc
 RUN echo "export export UNITREE_SDK_VERSION=3_2" >> ~/.bashrc
 RUN echo "export UNITREE_LEGGED_SDK_PATH=${SUPPORT_WS}/unitree_legged_sdk" >> ~/.bashrc
+RUN echo "export UNITREE_ACTUATOR_SDK_PATH=${SUPPORT_WS}/unitree_actuator_sdk" >> ~/.bashrc
 RUN echo "export ALIENGO_SDK_PATH=${SUPPORT_WS}/aliengo_sdk" >> ~/.bashrc
 RUN echo "export UNITREE_PLATFORM=\"amd64\"" >> ~/.bashrc
 RUN echo "source ${UNITREE_WS}/devel/setup.bash" >> ~/.bashrc
